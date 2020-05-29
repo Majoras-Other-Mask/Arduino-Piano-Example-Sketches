@@ -1,2 +1,2 @@
-Arduino-Piano-Example-Sketches
+Arduino-Pocket-Piano
 ==============================
