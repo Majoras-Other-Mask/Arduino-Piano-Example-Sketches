@@ -23,7 +23,12 @@ Screen displays (can be run without screen):
   Pitch (on/off)
   Knob function
   Waveform
+
  *********************************************/
+//Create interval timer object
+IntervalTimer myTimer; 
+
+ //*********************************************/
 //Screen Setup Here
 #include <SPI.h>
 #include <Wire.h>
@@ -39,9 +44,15 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 //***************************************************
 //Variable and Hardware Pin Setup Here
+//IDK why I need this but it currently is not working else a digital output 
+//pin is connected to amp Vin
+#define RAND 0
+
+//Slave Select Pin on Chip
+#define slaveSelectPin 9 
 
 //Setup function keys
-# define KEY_25 10 //function button is key 25 connected to pin 10
+#define KEY_25 10 //function button is key 25 connected to pin 10
 int pin25;
 int old25; 
 int secondFunc; 
@@ -51,11 +62,12 @@ int octaveDisplay;
 //storage variables
 int pitchMode; 
 int mode;
-char *modeString[] = {"Simple Play", "Octave Arp"};  
-char *pitchString[] = {"Pitch = OFF", "Pitch = ON"}; 
-char *knob1String[] = {"1 = NA", "1 = Delay"}; 
-char *knob2String[] = {"2 = NA", "2 = NA"};
-char *waveString[] = {"Wave = ???", "Wave = Sine", "Wave = Tri"}; 
+String modeString[] = {"Simple Play", "Octave Arp"};  
+String pitchString[] = {"Pitch = OFF", "Pitch = ON "}; 
+String knob1String[] = {"1 = NA", "1 = Delay"}; 
+String knob2String[] = {"2 = NA", "2 = NA"};
+String waveString[] = {"Wave = Saw", "Wave = Sine", "Wave = Triangle", "Wave = Square", "Wave = Pulse", "Wave = Fuzz",
+                      "Wave = Digital", "Wave = Tan"}; 
 
 //Setup LED
 #define PP_LED 8   // LED on pocket piano
@@ -64,7 +76,7 @@ char *waveString[] = {"Wave = ???", "Wave = Sine", "Wave = Tri"};
 int i;
 int j;
 int k; 
-int m; 
+ 
 
 //***************************************************
 //Audio Stuff here
@@ -108,33 +120,33 @@ uint32_t miditof[] = {
 };
 
 //this will be a reference for octave shifting
-//uint32_t miditofBase[] = {
-//  0, //need this 0 in order to have a silen note when not playing
-//  4188,
-//  4436,
-//  4700,
-//  4980,
-//  5276,
-//  5588,
-//  5920,
-//  6272,
-//  6645,
-//  7040,
-//  7459,
-//  7902,
-//  8372,
-//  8870,
-//  9397,
-//  9956,
-//  10548,
-//  11175,
-//  11840,
-//  12544,
-//  13290,
-//  14080,
-//  14918,
-//  15804,
-//};
+uint32_t miditofBase[] = {
+  0, //need this 0 in order to have a silen note when not playing
+  4188,
+  4436,
+  4700,
+  4980,
+  5276,
+  5588,
+  5920,
+  6272,
+  6645,
+  7040,
+  7459,
+  7902,
+  8372,
+  8870,
+  9397,
+  9956,
+  10548,
+  11175,
+  11840,
+  12544,
+  13290,
+  14080,
+  14918,
+  15804,
+};
 // this 32 bit number holds the states of the 24 buttons, 1 bit per button
 uint32_t buttons = 0xFFFFFFFF;
 
@@ -144,7 +156,7 @@ uint32_t buttons = 0xFFFFFFFF;
 //uint32_t frequency = 0;
 
 // this is the wave form of the oscillators 1 = sine wave, 2 = triangle, 0 = sawtooth
-uint8_t waveForm = 2;
+uint8_t waveForm = 1;
 
 // tuning knob 
 int pitchScale;
@@ -169,19 +181,13 @@ uint8_t octave = 0;
 void setup() {
   //******************************************************
   //Audio Setup happens here and needs to be first
-
-  //Timer2 setup  This is the audio rate timer, fires an interrupt at 15625 Hz sampling rate
-  TIMSK2 = 1 << OCIE2A; // interrupt enable audio timer
-  OCR2A = 127;
-  TCCR2A = 2;               // CTC mode, counts up to 127 then resets
-  TCCR2B = 0 << CS22 | 1 << CS21 | 0 << CS20; // different for atmega8 (no 'B' i think)
-
-  SPCR = 0x50;   // set up SPI port
-  SPSR = 0x01;
-  DDRB |= 0x2E;       // PB output for DAC CS, and SPI port
-  PORTB |= (1 << 1); // CS high
-
-  sei();			// global interrupt enable
+  myTimer.priority(0); 
+  myTimer.begin(sendNote, 64); 
+  pinMode(KEY_25, OUTPUT); 
+  pinMode(RAND, OUTPUT);
+  pinMode(slaveSelectPin, OUTPUT); 
+  SPI.usingInterrupt(myTimer);  
+  SPI.begin();  
 
   // configure pins for multiplexer
   pinMode(MUX_SEL_A, OUTPUT);  // these are the select pins
@@ -282,7 +288,7 @@ void loop(void)
       k &= 0x3;
     }
   }  
-
+  Serial.println(pin25);
   //Find out if button 25 has been pressed
   if (pin25==1 && old25 == 0) {
     //Flash LED 
@@ -296,19 +302,19 @@ void loop(void)
     if (secondFunc == 24){ //turn pitch tuning off
       pitchMode = (pitchMode+1) %2;  
     } else if (secondFunc == 22) { //change waveform
-      waveForm = (waveForm+1) %3; 
-//    } else if (secondFunc == 1) { 
-//        octaveShift = octaveShift - 1; 
-//        if (octaveShift < 0) { 
-//          octaveShift = 0 ;
-//        }
-//        octShiftFunc();
-//    } else if (secondFunc == 3) {
-//        octaveShift = octaveShift + 1; 
-//        if (octaveShift > 4) { 
-//          octaveShift = 4 ;
-//        }
-//        octShiftFunc();       
+      waveForm = (waveForm+1) %8; 
+    } else if (secondFunc == 1) { 
+        octaveShift = octaveShift - 1; 
+        if (octaveShift < 0) { 
+          octaveShift = 0 ;
+        }
+        octShiftFunc();
+    } else if (secondFunc == 3) {
+        octaveShift = octaveShift + 1; 
+        if (octaveShift > 4) { 
+          octaveShift = 4 ;
+        }
+        octShiftFunc();       
     } else { //change mode if only button 25 is pressed
       //increase counter
       mode = (mode+1) %2; //counter only goes 0,1 now! 
@@ -316,22 +322,22 @@ void loop(void)
     screenUpdate();
   }
 
-//  if (octaveDisplay > 0) { 
-//    miditof[key[0]] = miditofBase[key[0]] << octaveDisplay; 
-//    miditof[key[1]] = miditofBase[key[1]] << octaveDisplay; 
-//    miditof[key[2]] = miditofBase[key[2]] << octaveDisplay; 
-//    miditof[key[3]] = miditofBase[key[3]] << octaveDisplay; 
-//  } //else if (octaveDisplay < 0) { 
-//    miditof[key[0]] = miditofBase[key[0]] >> abs(octaveDisplay); 
-//    miditof[key[1]] = miditofBase[key[1]] >> abs(octaveDisplay);
-//    miditof[key[2]] = miditofBase[key[2]] >> abs(octaveDisplay);
-//    miditof[key[3]] = miditofBase[key[3]] >> abs(octaveDisplay);
-//  } else { 
-//    miditof[key[0]] = miditofBase[key[0]];
-//    miditof[key[1]] = miditofBase[key[1]];
-//    miditof[key[2]] = miditofBase[key[2]];
-//    miditof[key[3]] = miditofBase[key[3]];
-//  } 
+  if (octaveDisplay > 0) { 
+    miditof[key[0]] = miditofBase[key[0]] << octaveDisplay; 
+    miditof[key[1]] = miditofBase[key[1]] << octaveDisplay; 
+    miditof[key[2]] = miditofBase[key[2]] << octaveDisplay; 
+    miditof[key[3]] = miditofBase[key[3]] << octaveDisplay; 
+  } else if (octaveDisplay < 0) { 
+    miditof[key[0]] = miditofBase[key[0]] >> abs(octaveDisplay); 
+    miditof[key[1]] = miditofBase[key[1]] >> abs(octaveDisplay);
+    miditof[key[2]] = miditofBase[key[2]] >> abs(octaveDisplay);
+    miditof[key[3]] = miditofBase[key[3]] >> abs(octaveDisplay);
+  } else { 
+    miditof[key[0]] = miditofBase[key[0]];
+    miditof[key[1]] = miditofBase[key[1]];
+    miditof[key[2]] = miditofBase[key[2]];
+    miditof[key[3]] = miditofBase[key[3]];
+  } 
   
   //actually playing the notes! 
   if (mode == 0) { //simple play mode, only pitch is affected
@@ -363,6 +369,7 @@ void getButtons(void) {
     digitalWrite(MUX_SEL_A, j & 1);
     digitalWrite(MUX_SEL_B, (j >> 1) & 1);
     digitalWrite(MUX_SEL_C, (j >> 2) & 1);
+    delayMicroseconds(50); 
     buttons |= digitalRead(MUX_OUT_2) << j;
   }
   buttons <<= 8;
@@ -370,6 +377,7 @@ void getButtons(void) {
     digitalWrite(MUX_SEL_A, j & 1);
     digitalWrite(MUX_SEL_B, (j >> 1) & 1);
     digitalWrite(MUX_SEL_C, (j >> 2) & 1);
+    delayMicroseconds(50); 
     buttons |= digitalRead(MUX_OUT_1) << j;
   }
   buttons <<= 8;
@@ -377,29 +385,29 @@ void getButtons(void) {
     digitalWrite(MUX_SEL_A, j & 1);
     digitalWrite(MUX_SEL_B, (j >> 1) & 1);
     digitalWrite(MUX_SEL_C, (j >> 2) & 1);
+    delayMicroseconds(50); 
     buttons |= digitalRead(MUX_OUT_0) << j;
   }
   buttons |= 0x1000000;  // for the 25th button
   //buttons &= ~0x1000000;
  
-
   old25 = pin25; 
   pin25 = digitalRead(KEY_25);
 }
 
-//void octShiftFunc(void) { 
-//  if (octaveShift == 0) { 
-//    octaveDisplay = -2; 
-//  } else if (octaveShift == 1) { 
-//    octaveDisplay = -1; 
-//  } else if (octaveShift == 2) { 
-//    octaveDisplay = 0; 
-//  } else if (octaveShift == 3) { 
-//    octaveDisplay = 1; 
-//  } else { 
-//    octaveDisplay = 2; 
-//  } 
-//} 
+void octShiftFunc(void) { 
+  if (octaveShift == 0) { 
+    octaveDisplay = -2; 
+  } else if (octaveShift == 1) { 
+    octaveDisplay = -1; 
+  } else if (octaveShift == 2) { 
+    octaveDisplay = 0; 
+  } else if (octaveShift == 3) { 
+    octaveDisplay = 1; 
+  } else { 
+    octaveDisplay = 2; 
+  } 
+} 
 
 void screenUpdate(void) { 
   //Draw starting mode

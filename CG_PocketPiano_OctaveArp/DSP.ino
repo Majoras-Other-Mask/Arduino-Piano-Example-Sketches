@@ -116,8 +116,6 @@ ISR(TIMER2_COMPA_vect) {
   else
     oscil[3] = index[3];
 
-  Serial.println(oscil[0]); 
-  delay(250); 
   sample = (oscil[0] + oscil[1] + oscil[2] + oscil[3]) << 6;
 
   // format sample for SPI port

@@ -382,7 +382,7 @@ void getButtons(void) {
   buttons |= 0x1000000;  // for the 25th button
   //buttons &= ~0x1000000;
  
-
+  Serial.println(buttons);
   old25 = pin25; 
   pin25 = digitalRead(KEY_25);
 }

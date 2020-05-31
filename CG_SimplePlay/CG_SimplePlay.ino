@@ -24,6 +24,7 @@
 
 // here are some 12 tone equal temperament pitches.  We will scale these with a 'tune' knob
 uint32_t miditof[] = {
+  0,
   5920,
   6272,
   6645,
@@ -66,7 +67,7 @@ uint32_t frequency = 0;
 
 
 void setup(){
-
+  Serial.begin(9600);
   //Timer2 setup  This is the audio rate timer, fires an interrupt at 15625 Hz sampling rate
 
   TIMSK2 = 1<<OCIE2A;  // interrupt enable audio timer
@@ -105,7 +106,6 @@ void setup(){
   delay(100);
   digitalWrite(PP_LED, 0);
 
-  Serial.begin(9600);
   Serial.println("hello");
   Serial.println("welcome to synthesizer");
 
@@ -115,7 +115,6 @@ void setup(){
 
 void loop(void)
 {
-
   int i;
 
   getButtons();  
