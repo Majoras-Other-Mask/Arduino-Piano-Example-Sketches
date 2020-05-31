@@ -184,10 +184,10 @@ uint16_t oscil[] = {0, 0, 0, 0};   // oscillator output
 void sendNote() {
   
   // calculate frequency mod
-  accumulator[0] = accumulator[0] + frequency[0];
-  accumulator[1] = accumulator[1] + frequency[1];
-  accumulator[2] = accumulator[2] + frequency[2];
-  accumulator[3] = accumulator[3] + frequency[3];
+  accumulator[0] = accumulator[0] + freq[0];
+  accumulator[1] = accumulator[1] + freq[1];
+  accumulator[2] = accumulator[2] + freq[2];
+  accumulator[3] = accumulator[3] + freq[3];
   ind[0] = accumulator[0] >> 8;
   ind[1] = accumulator[1] >> 8;
   ind[2] = accumulator[2] >> 8;
@@ -196,18 +196,10 @@ void sendNote() {
     for (m=0; m<4; m++) { 
       oscil[m] = sineTable[ind[m]];
     }
-//    oscil[0] = sineTable[ind[0]];
-//    oscil[1] = sineTable[ind[1]];
-//    oscil[2] = sineTable[ind[2]];
-//    oscil[3] = sineTable[ind[3]];
   } else if (waveForm == 2) {
     for (m=0; m<4; m++) { 
       oscil[m] = triTable[ind[m]];
     }
-//    oscil[0] = triTable[ind[0]];
-//    oscil[1] = triTable[ind[1]];
-//    oscil[2] = triTable[ind[2]];
-//    oscil[3] = sineTable[ind[3]]; 
   } else if (waveForm == 3) { 
     for (m=0; m<4; m++) { 
       oscil[m] = squTable[ind[m]]; 
@@ -232,10 +224,6 @@ void sendNote() {
     for (m=0; m<4; m++) { 
       oscil[m] = sawTable[ind[m]];
     }
-//    oscil[0] = sawTable[ind[0]];
-//    oscil[1] = sawTable[ind[1]];
-//    oscil[2] = sawTable[ind[2]];
-//    oscil[3] = triTable[ind[3]];
   }
 
 

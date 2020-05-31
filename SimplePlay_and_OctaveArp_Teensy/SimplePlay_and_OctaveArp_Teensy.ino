@@ -76,6 +76,7 @@ String waveString[] = {"Wave = Saw", "Wave = Sine", "Wave = Triangle", "Wave = S
 int i;
 int j;
 int k; 
+int n; 
  
 
 //***************************************************
@@ -155,8 +156,8 @@ uint32_t buttons = 0xFFFFFFFF;
 // frequency  = (FrequencyInHertz * 65536) / SampleRate, here sample rate is 15625
 //uint32_t frequency = 0;
 
-// this is the wave form of the oscillators 1 = sine wave, 2 = triangle, 0 = sawtooth
-uint8_t waveForm = 1;
+// this is the wave form of the oscillators 
+uint8_t waveForm;
 
 // tuning knob 
 int pitchScale;
@@ -170,7 +171,7 @@ int knob2;
 // holds frequency value used for oscillator in phase steps
 // this is an integer proportial to Hertz in the following way:
 // frequency  = (FrequencyInHertz * 65536) / SampleRate, here sample rate is 15625
-uint32_t frequency[] = {0, 0, 0, 0}; //setting for 4 note poly synth
+uint32_t freq[] = {0, 0, 0, 0}; //setting for 4 note poly synth
 
 // voices (up to keys held down)
 uint8_t key[] = {0, 0, 0, 0}; //setting for 4 note poly synth
@@ -180,15 +181,18 @@ uint8_t octave = 0;
 
 void setup() {
   //******************************************************
-  //Audio Setup happens here and needs to be first
+  //Timer Setup
   myTimer.priority(0); 
   myTimer.begin(sendNote, 64); 
-  pinMode(KEY_25, OUTPUT); 
+  
+  //******************************************************
+  //SPI Setup
   pinMode(RAND, OUTPUT);
   pinMode(slaveSelectPin, OUTPUT); 
   SPI.usingInterrupt(myTimer);  
   SPI.begin();  
 
+  //******************************************************
   // configure pins for multiplexer
   pinMode(MUX_SEL_A, OUTPUT);  // these are the select pins
   pinMode(MUX_SEL_B, OUTPUT);
@@ -206,6 +210,7 @@ void setup() {
   //******************************************************
   //Misc. Setup happens here
   pinMode(PP_LED, OUTPUT); //setup LED
+  pinMode(KEY_25, OUTPUT); 
   //pinMode(KEY_25, INPUT); //pin works as an input but if I uncomment this line everything breaks ¯\_(ツ)_/¯ 
   i = 0; 
   j = 0; 
@@ -214,6 +219,7 @@ void setup() {
   pitchMode = 0; 
   octaveShift = 2; 
   octaveDisplay = 0; 
+  waveForm = 1; //starting waveform 
 
   //flash led to let us know it is turning on
   digitalWrite(PP_LED, 1);
@@ -226,12 +232,13 @@ void setup() {
   delay(100);
   digitalWrite(PP_LED, 1);
 
+  //Turning on serial for debugging
   Serial.begin(9600);
 
   //******************************************************
   //Screen Setup happens here
 
-    //Uncomment the below if you want to check if the screen is working, not necessary if not using screen
+  //Uncomment the below if you want to check if the screen is working, not necessary if not using screen
   //  // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
   if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { // Address 0x3C for 128x32
     Serial.println(F("SSD1306 allocation failed"));
@@ -251,11 +258,11 @@ void setup() {
   //get starting screen
   screenUpdate(); 
 
+  //******************************************************
   //We can print a serial message to say hi as well (useful for debugging)
   Serial.println("Hello from your synthesizer");
 
-  //******************************************************
-  //Turn LED on 
+  //Turn LED on to let us know we are ready to start
   digitalWrite(PP_LED, 0);
 }
 
@@ -288,142 +295,43 @@ void loop(void)
       k &= 0x3;
     }
   }  
-  Serial.println(pin25);
-  //Find out if button 25 has been pressed
-  if (pin25==1 && old25 == 0) {
-    //Flash LED 
-    digitalWrite(PP_LED, 1);
-    delay(100);
-    digitalWrite(PP_LED, 0);
 
-    //determine if a secondary function key has been pressed for pitch or waveform
-    secondFunc = key[0]; 
-
-    if (secondFunc == 24){ //turn pitch tuning off
-      pitchMode = (pitchMode+1) %2;  
-    } else if (secondFunc == 22) { //change waveform
-      waveForm = (waveForm+1) %8; 
-    } else if (secondFunc == 1) { 
-        octaveShift = octaveShift - 1; 
-        if (octaveShift < 0) { 
-          octaveShift = 0 ;
-        }
-        octShiftFunc();
-    } else if (secondFunc == 3) {
-        octaveShift = octaveShift + 1; 
-        if (octaveShift > 4) { 
-          octaveShift = 4 ;
-        }
-        octShiftFunc();       
-    } else { //change mode if only button 25 is pressed
-      //increase counter
-      mode = (mode+1) %2; //counter only goes 0,1 now! 
-    }
-    screenUpdate();
-  }
-
+  //secondFunc key is alwasys the lowest note played
+  secondFunc = key[0]; 
+  //call function key function
+  key25Func(); 
+  
+  //apply octave shift
   if (octaveDisplay > 0) { 
-    miditof[key[0]] = miditofBase[key[0]] << octaveDisplay; 
-    miditof[key[1]] = miditofBase[key[1]] << octaveDisplay; 
-    miditof[key[2]] = miditofBase[key[2]] << octaveDisplay; 
-    miditof[key[3]] = miditofBase[key[3]] << octaveDisplay; 
+    for (n = 0; n < 4; n++) { 
+      miditof[key[n]] = miditofBase[key[n]] << octaveDisplay;
+    }
   } else if (octaveDisplay < 0) { 
-    miditof[key[0]] = miditofBase[key[0]] >> abs(octaveDisplay); 
-    miditof[key[1]] = miditofBase[key[1]] >> abs(octaveDisplay);
-    miditof[key[2]] = miditofBase[key[2]] >> abs(octaveDisplay);
-    miditof[key[3]] = miditofBase[key[3]] >> abs(octaveDisplay);
+    for (n = 0; n < 4; n++) { 
+      miditof[key[n]] = miditofBase[key[n]] >> abs(octaveDisplay);
+    }
   } else { 
-    miditof[key[0]] = miditofBase[key[0]];
-    miditof[key[1]] = miditofBase[key[1]];
-    miditof[key[2]] = miditofBase[key[2]];
-    miditof[key[3]] = miditofBase[key[3]];
+    for (n = 0; n < 4; n++) { 
+      miditof[key[n]] = miditofBase[key[n]];
+    }
   } 
   
   //actually playing the notes! 
   if (mode == 0) { //simple play mode, only pitch is affected
-    frequency[0] = (((miditof[key[0]]) * (pitchScale))>> 9);  // scale frequency by tuning knob and octave
-    frequency[1] = (((miditof[key[1]])  * (pitchScale))>> 9);
-    frequency[2] = (((miditof[key[2]])  * (pitchScale))>> 9);
-    frequency[3] = (((miditof[key[3]])  * (pitchScale))>> 9); 
-    delay(10);   // wait 10 ms
-  
+    freq[0] = (((miditof[key[0]]) * (pitchScale))>> 9);  // scale frequency by tuning knob and octave
+    freq[1] = (((miditof[key[1]])  * (pitchScale))>> 9);
+    freq[2] = (((miditof[key[2]])  * (pitchScale))>> 9);
+    freq[3] = (((miditof[key[3]])  * (pitchScale))>> 9); 
+    delay(10);   // wait 10 ms  
   } else { //octave arp mode    
     // do octave increase
     octave++;
-    
     // only from 0 - 3
     octave &= 3;
-  
-    frequency[0] = ((((miditof[key[0]]) * (pitchScale)) >> 9)>> octave);  // scale frequency by tuning knob and octave
-    frequency[1] = ((((miditof[key[1]]) * (pitchScale)) >> 9)>> octave);
-    frequency[2] = ((((miditof[key[2]]) * (pitchScale)) >> 9)>> octave);
-    frequency[3] = ((((miditof[key[3]]) * (pitchScale)) >> 9)>> octave); 
+    freq[0] = ((((miditof[key[0]]) * (pitchScale)) >> 9)>> octave);  // scale frequency by tuning knob and octave
+    freq[1] = ((((miditof[key[1]]) * (pitchScale)) >> 9)>> octave);
+    freq[2] = ((((miditof[key[2]]) * (pitchScale)) >> 9)>> octave);
+    freq[3] = ((((miditof[key[3]]) * (pitchScale)) >> 9)>> octave); 
     delay(knob1 >> 2);   // sweep speed
   }
-}
-
-// this funcion reads the buttons and stores their states in the global 'buttons' variable
-void getButtons(void) {
-  buttons = 0;
-  for (j = 0; j < 8; j++) {
-    digitalWrite(MUX_SEL_A, j & 1);
-    digitalWrite(MUX_SEL_B, (j >> 1) & 1);
-    digitalWrite(MUX_SEL_C, (j >> 2) & 1);
-    delayMicroseconds(50); 
-    buttons |= digitalRead(MUX_OUT_2) << j;
-  }
-  buttons <<= 8;
-  for (j = 0; j < 8; j++) {
-    digitalWrite(MUX_SEL_A, j & 1);
-    digitalWrite(MUX_SEL_B, (j >> 1) & 1);
-    digitalWrite(MUX_SEL_C, (j >> 2) & 1);
-    delayMicroseconds(50); 
-    buttons |= digitalRead(MUX_OUT_1) << j;
-  }
-  buttons <<= 8;
-  for (j = 0; j < 8; j++) {
-    digitalWrite(MUX_SEL_A, j & 1);
-    digitalWrite(MUX_SEL_B, (j >> 1) & 1);
-    digitalWrite(MUX_SEL_C, (j >> 2) & 1);
-    delayMicroseconds(50); 
-    buttons |= digitalRead(MUX_OUT_0) << j;
-  }
-  buttons |= 0x1000000;  // for the 25th button
-  //buttons &= ~0x1000000;
- 
-  old25 = pin25; 
-  pin25 = digitalRead(KEY_25);
-}
-
-void octShiftFunc(void) { 
-  if (octaveShift == 0) { 
-    octaveDisplay = -2; 
-  } else if (octaveShift == 1) { 
-    octaveDisplay = -1; 
-  } else if (octaveShift == 2) { 
-    octaveDisplay = 0; 
-  } else if (octaveShift == 3) { 
-    octaveDisplay = 1; 
-  } else { 
-    octaveDisplay = 2; 
-  } 
-} 
-
-void screenUpdate(void) { 
-  //Draw starting mode
-  display.clearDisplay();
-  display.setCursor(0, 0);
-  display.setTextColor(SSD1306_WHITE);
-  display.setTextSize(1);
-  display.setTextWrap(1); 
-  display.println(modeString[mode]);
-  display.print(pitchString[pitchMode]);
-  display.print("   "); 
-  display.print("Oct: "); 
-  display.println(octaveDisplay); 
-  display.print(knob1String[mode]); 
-  display.print("   "); 
-  display.println(knob2String[mode]);
-  display.println(waveString[waveForm]);  
-  display.display();
 }
