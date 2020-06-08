@@ -46,7 +46,7 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 //Variable and Hardware Pin Setup Here
 //IDK why I need this but it currently is not working else a digital output 
 //pin is connected to amp Vin
-#define RAND 0
+//#define RAND 0
 
 //Slave Select Pin on Chip
 #define slaveSelectPin 9 
@@ -180,7 +180,7 @@ uint32_t freq[] = {0, 0, 0, 0}; //setting for 4 note poly synth
 uint8_t key[] = {0, 0, 0, 0}; //setting for 4 note poly synth
 
 // octave multiplier
-uint8_t octave = 0;
+uint8_t octave = 0; 
 
 void setup() {
   //******************************************************
@@ -190,8 +190,8 @@ void setup() {
   
   //******************************************************
   //SPI Setup
-  pinMode(RAND, OUTPUT);
-  pinMode(slaveSelectPin, OUTPUT); 
+  //pinMode(RAND, OUTPUT);
+  pinMode(slaveSelectPin, INPUT); 
   SPI.usingInterrupt(myTimer);  
   SPI.begin();  
 
@@ -267,14 +267,17 @@ void setup() {
 
   //Turn LED on to let us know we are ready to start
   digitalWrite(PP_LED, 0);
+  
+  
+  analogWriteResolution(12); 
 }
 
 
 void loop(void)
 {
   //knob 1 and 2 are mode dependent
-  knob1 = analogRead(0); 
-  knob2 = analogRead(1); 
+  knob1 = analogRead(A0); 
+  knob2 = analogRead(A1); 
 
   //pitch knob can be turned on and off
   if (pitchMode == 1) { 
@@ -298,7 +301,7 @@ void loop(void)
       k &= 0x3;
     }
   }  
-
+    
   //secondFunc key is alwasys the lowest note played
   secondFunc = key[0]; 
   //call function key function

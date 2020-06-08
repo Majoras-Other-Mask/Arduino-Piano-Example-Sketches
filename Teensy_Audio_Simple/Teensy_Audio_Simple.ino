@@ -1,37 +1,17 @@
-/*********************************************
-Current "Engines": 
-1) Simple Play (basic keyboard)
-    Knob 1 = NA
-    Knob 2 = NA
-2) Octave Arpeggiator 
-    Knob 1 = Delay
-    Knob 2 = NA
+// Waveform Example
 
-Waveforms (change with key 23 + 25): 
-1)?
-2) Sine
-3) Triangle
-
-Pitch Shift: 
-1) ON (key 22 + 25) = Knob 3 to control
-2) OFF (key 24 + 25)
-
-Volume is on Knob 4
-
-Screen displays (can be run without screen): 
-  Mode
-  Pitch (on/off)
-  Knob function
-  Waveform
-
- *********************************************/
-//Create interval timer object
-IntervalTimer myTimer; 
-
- //*********************************************/
-//Screen Setup Here
-#include <SPI.h>
+#include <Audio.h>
 #include <Wire.h>
+#include <SPI.h>
+#include <SD.h>
+
+AudioSynthWaveform       waveform1;      //xy=171,84
+AudioOutputAnalogStereo  dacs1;          //xy=372,173
+AudioConnection          patchCord1(waveform1, 0, dacs1, 0);
+AudioConnection          patchCord2(waveform1, 0, dacs1, 1);
+
+//*********************************************/
+//Screen Setup Here
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
@@ -44,12 +24,6 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 //***************************************************
 //Variable and Hardware Pin Setup Here
-//IDK why I need this but it currently is not working else a digital output 
-//pin is connected to amp Vin
-#define RAND 0
-
-//Slave Select Pin on Chip
-#define slaveSelectPin 9 
 
 //Setup function keys
 #define KEY_25 10 //function button is key 25 connected to pin 10
@@ -66,8 +40,8 @@ String modeString[] = {"Simple Play", "Octave Arp", "FM"};
 String pitchString[] = {"Pitch = OFF", "Pitch = ON "}; 
 String knob1String[] = {"1 = NA", "1 = Delay", "1 = Harm." }; 
 String knob2String[] = {"2 = NA", "2 = NA", "2 = Depth"};
-String waveString[] = {"Wave = Saw", "Wave = Sine", "Wave = Triangle", "Wave = Square", "Wave = Pulse", "Wave = Fuzz",
-                      "Wave = Digital", "Wave = Tan"}; 
+String waveString[] = {"SINE", "SAW", "REVERSE SAW", "SQUARE", "TRIANGLE", "TRIANGLE VARIABLE",
+                      "ARBITRARY", "PULSE"}; 
 
 //Setup LED
 #define PP_LED 8   // LED on pocket piano
@@ -77,10 +51,9 @@ int i;
 int j;
 int k; 
 int n; 
- 
 
 //***************************************************
-//Audio Stuff here
+//Audio Backend Stuff Here
 // define pins to read buttons
 #define MUX_SEL_A 4
 #define MUX_SEL_B 3
@@ -89,75 +62,38 @@ int n;
 #define MUX_OUT_1 6
 #define MUX_OUT_2 5
 
-//This has low C set to F#6
-// here are some 12 tone equal temperament pitches.  We will scale these with a 'tune' knob
-//Set so that low C is set to C6
-uint32_t miditof[] = {
-  0, //need this 0 in order to have a silen note when not playing
-  4188,
-  4436,
-  4700,
-  4980,
-  5276,
-  5588,
-  5920,
-  6272,
-  6645,
-  7040,
-  7459,
-  7902,
-  8372,
-  8870,
-  9397,
-  9956,
-  10548,
-  11175,
-  11840,
-  12544,
-  13290,
-  14080,
-  14918,
-  15804
+uint32_t freqBase[] = { 
+  0, 
+  1047, 
+  1109,
+  1175, 
+  1245, 
+  1319, 
+  1397, 
+  1480, 
+  1568, 
+  1661, 
+  1760, 
+  1865, 
+  1976, 
+  2093, 
+  2217, 
+  2349, 
+  2489, 
+  2637,
+  2794, 
+  3136, 
+  3322,
+  3520, 
+  3729, 
+  3951
 };
 
-//this will be a reference for octave shifting
-uint32_t miditofBase[] = {
-  0, //need this 0 in order to have a silen note when not playing
-  4188,
-  4436,
-  4700,
-  4980,
-  5276,
-  5588,
-  5920,
-  6272,
-  6645,
-  7040,
-  7459,
-  7902,
-  8372, 
-  8870,
-  9397,
-  9956,
-  10548,
-  11175,
-  11840,
-  12544,
-  13290,
-  14080,
-  14918,
-  15804,
-};
 // this 32 bit number holds the states of the 24 buttons, 1 bit per button
 uint32_t buttons = 0xFFFFFFFF;
 
-// holds frequency value used for oscillator in phase steps
-// this is an integer proportial to Hertz in the following way:
-// frequency  = (FrequencyInHertz * 65536) / SampleRate, here sample rate is 15625
-//uint32_t frequency = 0;
-
 // this is the wave form of the oscillators 
-uint8_t waveForm;
+int waveForm; 
 
 // tuning knob 
 int pitchScale;
@@ -168,33 +104,22 @@ int knob1;
 //knob 2
 int knob2; 
 
-//gain
-uint8_t gn = 0xff; 
-
-// holds frequency value used for oscillator in phase steps
-// this is an integer proportial to Hertz in the following way:
-// frequency  = (FrequencyInHertz * 65536) / SampleRate, here sample rate is 15625
-uint32_t freq[] = {0, 0, 0, 0}; //setting for 4 note poly synth
+// holds frequency value used to play
+uint32_t freqPlay[] = {0, 0, 0, 0}; //setting for 4 note poly synth
 
 // voices (up to keys held down)
 uint8_t key[] = {0, 0, 0, 0}; //setting for 4 note poly synth
 
 // octave multiplier
-uint8_t octave = 0;
+uint8_t octave = 0; 
+
+
+//******************************************************
+int current_waveform=0;
+
+extern const int16_t myWaveform[256];  // defined in myWaveform.ino
 
 void setup() {
-  //******************************************************
-  //Timer Setup
-  myTimer.priority(0); 
-  myTimer.begin(sendNote, 64); 
-  
-  //******************************************************
-  //SPI Setup
-  pinMode(RAND, OUTPUT);
-  pinMode(slaveSelectPin, OUTPUT); 
-  SPI.usingInterrupt(myTimer);  
-  SPI.begin();  
-
   //******************************************************
   // configure pins for multiplexer
   pinMode(MUX_SEL_A, OUTPUT);  // these are the select pins
@@ -222,7 +147,7 @@ void setup() {
   pitchMode = 0; 
   octaveShift = 2; 
   octaveDisplay = 0; 
-  waveForm = 1; //starting waveform 
+  waveForm = 0; //starting waveform 
 
   //flash led to let us know it is turning on
   digitalWrite(PP_LED, 1);
@@ -238,6 +163,21 @@ void setup() {
   //Turning on serial for debugging
   Serial.begin(9600);
 
+  //******************************************************
+  // Audio connections require memory to work.  For more
+  // detailed information, see the MemoryAndCpuUsage example
+  AudioMemory(10);
+
+  // Confirgure both to use "myWaveform" for WAVEFORM_ARBITRARY
+  waveform1.arbitraryWaveform(myWaveform, 172.0);
+
+  // configure both waveforms for 440 Hz and maximum amplitude
+  waveform1.frequency(0);
+  waveform1.amplitude(1.0);
+  
+  current_waveform = WAVEFORM_SINE;
+  waveform1.begin(current_waveform);
+    
   //******************************************************
   //Screen Setup happens here
 
@@ -259,7 +199,7 @@ void setup() {
   delay(2000); // Pause for 2 seconds
   
   //get starting screen
-  screenUpdate(); 
+  screenUpdate();
 
   //******************************************************
   //We can print a serial message to say hi as well (useful for debugging)
@@ -269,25 +209,27 @@ void setup() {
   digitalWrite(PP_LED, 0);
 }
 
-
-void loop(void)
-{
+void loop() {
+  //******************************************************
+  //Read the knob values
   //knob 1 and 2 are mode dependent
-  knob1 = analogRead(0); 
-  knob2 = analogRead(1); 
+  knob1 = analogRead(A0); 
+  knob2 = analogRead(A1); 
 
-  //pitch knob can be turned on and off
+  //pitch control can be turned on and off
   if (pitchMode == 1) { 
     //knob 3 is for the pitch
-    pitchScale = analogRead(2);
+    pitchScale = analogRead(A2);
   } else { 
     pitchScale = 128; //this lets us scale to C6 when not tuning using pitch knob
   }
-  
-  //get the state of the buttons
-  getButtons();
 
-  //Get up to 4 keys
+  //******************************************************
+  //get the state of the buttons, outputs are ints 0-24
+  //and info on button 25
+  getButton();
+
+  //Get up to 4 keys that were pressed down
   k = 0;  
   key[0] = key[1] = key[2] = key[3] = 0;
   for (i = 0; i < 25; i++){             // read through buttons
@@ -302,42 +244,34 @@ void loop(void)
   //secondFunc key is alwasys the lowest note played
   secondFunc = key[0]; 
   //call function key function
-  key25Func(); 
-  
+  key25Func();
+
+  //******************************************************
+  //get frequencies we are going to play
+    
   //apply octave shift
   if (octaveDisplay > 0) { 
     for (n = 0; n < 4; n++) { 
-      miditof[key[n]] = miditofBase[key[n]] << octaveDisplay;
+      freqPlay[n] = freqBase[key[n]] << octaveDisplay;
     }
   } else if (octaveDisplay < 0) { 
     for (n = 0; n < 4; n++) { 
-      miditof[key[n]] = miditofBase[key[n]] >> abs(octaveDisplay);
+      freqPlay[n] = freqBase[key[n]] >> abs(octaveDisplay);
     }
   } else { 
     for (n = 0; n < 4; n++) { 
-      miditof[key[n]] = miditofBase[key[n]];
+      freqPlay[n] = freqBase[key[n]];
     }
-  } 
-  
-  //actually playing the notes! 
-  if (mode == 1) { //octave arp mode    
-    // do octave increase
-    octave++;
-    // only from 0 - 3
-    octave &= 3;
-    for (n = 0; n < 4; n++) { 
-      freq[n] =  ((((miditof[key[n]]) * (pitchScale)) >> 9)>> octave);
-    }
-    delay(knob1 >> 2);   // sweep speed
-  } else if (mode == 2) { //simple FM synth
-    for (n = 0; n < 4; n++) {  
-      freq[n] =  ((miditof[key[n]]) * (pitchScale)) >> 12;
-    }
-    delay(10); 
-  } else { //simple play mode, only pitch is affected
-        for (n = 0; n < 4; n++) { 
-      freq[n] =  ((miditof[key[n]]) * (pitchScale)) >> 9;
-    }
-    delay(10);   // wait 10 ms 
   }
+  
+  // Read the buttons and knobs, scale knobs to 0-1.0
+ // button0.update();
+//  float knob_A2 = (float)analogRead(A2) / 1023.0;
+
+  AudioNoInterrupts();
+  // use Knob A2 to adjust the frequency of both waveforms
+//  waveform1.frequency(100.0 + knob_A2 * 900.0);
+  waveform1.frequency(freqPlay[0]);
+  AudioInterrupts();
+  
 }
