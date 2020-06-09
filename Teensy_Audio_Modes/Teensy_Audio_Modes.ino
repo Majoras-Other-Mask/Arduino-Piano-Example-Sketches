@@ -4,37 +4,62 @@
 #include <SD.h>
 #include <SerialFlash.h>
 
+#include <Audio.h>
+#include <Wire.h>
+#include <SPI.h>
+#include <SD.h>
+#include <SerialFlash.h>
+
 // GUItool: begin automatically generated code
-AudioSynthWaveformSine   sine1;          //xy=251,681
-AudioSynthWaveform       waveform2;      //xy=255,359
-AudioSynthWaveform       waveform1;      //xy=257,287
-AudioSynthWaveform       waveform3;      //xy=260,434
-AudioSynthWaveform       waveform4;      //xy=262,521
-AudioEffectEnvelope      envelope1;      //xy=413,286
-AudioEffectEnvelope      envelope2;      //xy=414,359
-AudioEffectEnvelope      envelope3;      //xy=415,432
-AudioAnalyzeRMS          rms1;           //xy=414,682
-AudioEffectEnvelope      envelope4;      //xy=415,523
-AudioMixer4              mixer1;         //xy=657,377
-AudioAmplifier           amp1;           //xy=783,378
-AudioEffectBitcrusher    bitcrusher1;    //xy=987,376
-AudioOutputAnalogStereo  dacs1;          //xy=1232,377
+AudioSynthWaveformSine   sine1;          //xy=110,783
+AudioSynthWaveformModulated waveformMod4;   //xy=222,639
+AudioSynthWaveformModulated waveformMod2;   //xy=232,323
+AudioSynthWaveformModulated waveformMod1;   //xy=234,188
+AudioSynthWaveformModulated waveformMod3;   //xy=233,478
+AudioSynthWaveform       waveform4;      //xy=237,575
+AudioSynthWaveform       waveform2;      //xy=239,271
+AudioSynthWaveform       waveform3;      //xy=244,423
+AudioSynthWaveform       waveform1;      //xy=249,134
+AudioAnalyzeRMS          rms1;           //xy=324,778
+AudioMixer4              mixer5;         //xy=444,589
+AudioMixer4              mixer4;         //xy=445,439
+AudioMixer4              mixer2;         //xy=447,163
+AudioMixer4              mixer3;         //xy=447,296
+AudioEffectEnvelope      envelope4;      //xy=639,585
+AudioEffectEnvelope      envelope2;      //xy=642,308
+AudioEffectEnvelope      envelope1;      //xy=643,212
+AudioEffectEnvelope      envelope3;      //xy=647,434
+AudioMixer4              mixer1;         //xy=889,379
+AudioAmplifier           amp1;           //xy=1015,380
+AudioOutputAnalogStereo  dacs1;          //xy=1214,380
 AudioConnection          patchCord1(sine1, rms1);
-AudioConnection          patchCord2(waveform2, envelope2);
-AudioConnection          patchCord3(waveform1, envelope1);
-AudioConnection          patchCord4(waveform3, envelope3);
-AudioConnection          patchCord5(waveform4, envelope4);
-AudioConnection          patchCord6(envelope1, 0, mixer1, 0);
-AudioConnection          patchCord7(envelope2, 0, mixer1, 1);
-AudioConnection          patchCord8(envelope3, 0, mixer1, 2);
-AudioConnection          patchCord9(envelope4, 0, mixer1, 3);
-AudioConnection          patchCord10(mixer1, amp1);
-AudioConnection          patchCord11(amp1, bitcrusher1);
-AudioConnection          patchCord12(bitcrusher1, 0, dacs1, 1);
-AudioConnection          patchCord13(bitcrusher1, 0, dacs1, 0);
+AudioConnection          patchCord2(sine1, 0, waveformMod4, 0);
+AudioConnection          patchCord3(sine1, 0, waveformMod3, 0);
+AudioConnection          patchCord4(sine1, 0, waveformMod2, 0);
+AudioConnection          patchCord5(sine1, 0, waveformMod1, 0);
+AudioConnection          patchCord6(waveformMod4, 0, mixer5, 1);
+AudioConnection          patchCord7(waveformMod2, 0, mixer3, 1);
+AudioConnection          patchCord8(waveformMod1, 0, mixer2, 1);
+AudioConnection          patchCord9(waveformMod3, 0, mixer4, 1);
+AudioConnection          patchCord10(waveform4, 0, mixer5, 0);
+AudioConnection          patchCord11(waveform2, 0, mixer3, 0);
+AudioConnection          patchCord12(waveform3, 0, mixer4, 0);
+AudioConnection          patchCord13(waveform1, 0, mixer2, 0);
+AudioConnection          patchCord14(mixer5, envelope4);
+AudioConnection          patchCord15(mixer4, envelope3);
+AudioConnection          patchCord16(mixer2, envelope1);
+AudioConnection          patchCord17(mixer3, envelope2);
+AudioConnection          patchCord18(envelope4, 0, mixer1, 3);
+AudioConnection          patchCord19(envelope2, 0, mixer1, 1);
+AudioConnection          patchCord20(envelope1, 0, mixer1, 0);
+AudioConnection          patchCord21(envelope3, 0, mixer1, 2);
+AudioConnection          patchCord22(mixer1, amp1);
+AudioConnection          patchCord23(amp1, 0, dacs1, 0);
+AudioConnection          patchCord24(amp1, 0, dacs1, 1);
 // GUItool: end automatically generated code
 
 
+AudioSynthWaveformModulated *wavesFM[4] = {&waveformMod1, &waveformMod2, &waveformMod3, &waveformMod4}; 
 
 AudioSynthWaveform *waves[4] = {&waveform1, &waveform2, &waveform3, &waveform4}; 
 
@@ -68,10 +93,10 @@ int octaveDisplay;
 //storage variables
 int pitchMode; 
 int mode;
-String modeString[] = {"Vibrato Synth", "Harmonic Sweeper", "Octave Arpeggiator", "Octave Cascade", "Bitcrusher"};  
+String modeString[] = {"Vibrato Synth", "Harmonic Sweeper", "Octave Arpeggiator", "Octave Cascade", "FM Synth", "FM Arpeggiator"};  
 String pitchString[] = {"Pitch = OFF", "Pitch = ON "}; 
-String knob1String[] = {"1 = Depth", "1 = Rate", "1 = Rate", "1 = Rate", "1 = Bits"}; 
-String knob2String[] = {"2 = Rate", "2 = Env.", "2 = Env.", "2 = Decay", "2 = Rate"};
+String knob1String[] = {"1 = Depth", "1 = Rate", "1 = Rate", "1 = Rate", "1 = Mod.", "1 = Rate"}; 
+String knob2String[] = {"2 = Rate", "2 = Env.", "2 = Env.", "2 = Decay", "2 = Env.", "2 = Env."};
 String waveString[] = {"SINE", "SAW", "REVERSE SAW", "SQUARE", "TRIANGLE", "TRIANGLE VARIABLE",
                       "PULSE"}; 
 
@@ -239,6 +264,10 @@ void setup() {
     waves[z]->frequency(0); 
     waves[z]->amplitude(1.0); 
     waves[z]->begin(current_waveform); 
+    wavesFM[z]->frequency(0); 
+    wavesFM[z]->amplitude(1.0); 
+    wavesFM[z]->begin(current_waveform); 
+    wavesFM[z]->frequencyModulation(5); 
   }
   
   //mixer1 is for mixing notes being played
@@ -247,7 +276,17 @@ void setup() {
   mixer1.gain(2, 0.25); 
   mixer1.gain(3, 0.25); 
 
-  amp1.gain(2); 
+  //mixers 2-5 are used to switch between regular wave and modulated wave
+  mixer2.gain(0,1); 
+  mixer2.gain(1,1); 
+  mixer3.gain(0,1); 
+  mixer3.gain(1,1); 
+  mixer4.gain(0,1); 
+  mixer4.gain(1,1); 
+  mixer5.gain(0,1); 
+  mixer5.gain(1,1); 
+  
+  amp1.gain(3); 
 
   //default envelope variables
   ADSR_a = 9.2; 
@@ -268,10 +307,7 @@ void setup() {
   sine1.amplitude(1); 
   sine1.frequency(5);
   
-  //setup bitcrusher
-  bitcrusher1.bits(bitsPassthrough); 
-  bitcrusher1.sampleRate(bitsRatePassthrough); 
-  
+
   //******************************************************
   //Screen Setup happens here
 
@@ -483,23 +519,79 @@ void loop() {
       }
     delay(int(knob1 >> 2) + 50);   // sweep speed
   } else if (mode == 4) { 
-    //bit crusher
-    //knob 1 = bits
-    //knob 2 = sampling rate
+    // FM Synth
+    //knob 1 = modulation
+    //knob 2 = envelope
     //we change the bits/sample rate based on knob 1 and 2
-    bitcrusher1.bits(int(15 * knob1/1023.0)+1); 
-    bitcrusher1.sampleRate(int(44095 * knob2 / 1023.0)+5); 
+    sine1.amplitude(knob1 / 1023.0); 
+    sine1.frequency(20.3 * knob2 / 1023.0);    
     delay(10); 
+  } else if (mode == 5) { 
+    // Octave Arpeggiator
+    //knob 1 = rate
+    //knob 2 = envelope scaled
+    arp = (arp + 1) % 7; 
+    for (n=0; n<4; n++) { 
+      if (arp == 1) { 
+        freqPlay[n] = freqPlay[n]*pow(two12th,4); 
+      } else if (arp == 2) { 
+        freqPlay[n] = freqPlay[n]*pow(two12th,7);
+      } else if (arp == 3) { 
+        freqPlay[n] = freqPlay[n]*2.0;
+      } else if (arp == 4) { 
+        freqPlay[n] = freqPlay[n]*2*pow(two12th,4);
+      } else if (arp == 5) { 
+        freqPlay[n] = freqPlay[n]*2*pow(two12th,7);
+      } else if (arp == 6) { 
+        freqPlay[n] = freqPlay[n]*4; 
+      }
+    } 
+
+    
+    for (n = 0; n < 4; n++) { 
+      freqPlay[n] = freqPlay[n] * (octave+1); 
+      envs[n]->decay(255 * knob2 / 1023.0);     
+    }
+      
+    //control envelope with knob 2
+    envMult = knob2 / 1023.0;
+    envelope1.attack(80* envMult); 
+    envelope2.attack(80 * envMult);
+    envelope3.attack(80 * envMult);
+    envelope4.attack(80 * envMult);
+    envelope1.hold(24 * envMult);
+    envelope2.hold(24 * envMult);
+    envelope3.hold(24 * envMult);
+    envelope4.hold(24 * envMult);
+    envelope1.decay(100 * envMult);
+    envelope2.decay(100 * envMult);
+    envelope3.decay(100 * envMult);
+    envelope4.decay(100 * envMult);
+
+    //control sweep speed with knob 1
+    delay(int(knob1 >> 2) + 50);   // sweep speed
   }
 
+  //Play the notes
   AudioNoInterrupts();
-  for (n = 0; n < 4; n++) { 
-    freqPlay[n] = freqPlay[n]*pitchScale;
-    if (freqLast[n] != freqPlay[n]){ 
-      envs[n] -> noteOff(); 
-      waves[n] -> frequency(freqPlay[n]);
-      envs[n] ->noteOn();      
+  if (mode == 4 || mode == 5) { 
+   for (n = 0; n < 4; n++) { 
+      freqPlay[n] = freqPlay[n]*pitchScale;
+      if (freqLast[n] != freqPlay[n]){ 
+        envs[n] -> noteOff(); 
+        wavesFM[n] -> frequency(freqPlay[n]);
+        envs[n] ->noteOn();      
+      }
+    } 
+  } else { 
+    for (n = 0; n < 4; n++) { 
+      freqPlay[n] = freqPlay[n]*pitchScale;
+      if (freqLast[n] != freqPlay[n]){ 
+        envs[n] -> noteOff(); 
+        waves[n] -> frequency(freqPlay[n]);
+        envs[n] ->noteOn();      
+      }
     }
-  }
+  } 
   AudioInterrupts(); 
 }

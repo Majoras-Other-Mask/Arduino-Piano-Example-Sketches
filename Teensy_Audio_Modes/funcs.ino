@@ -83,7 +83,7 @@ void key25Func(void) {
         octShiftFunc();       
     } else { //change mode if only button 25 is pressed
       //increase counter 
-      mode = (mode+1) %5; //counter goes 0-4
+      mode = (mode+1) %6; //counter goes 0-4
       modeCleanUp(); //run this to cleanup any mode specific settings
     }
     screenUpdate();
@@ -141,6 +141,10 @@ void waveformSwitch(void) {
   waveform2.begin(current_waveform);
   waveform3.begin(current_waveform);
   waveform4.begin(current_waveform);
+  waveformMod1.begin(current_waveform);
+  waveformMod2.begin(current_waveform);
+  waveformMod3.begin(current_waveform);
+  waveformMod4.begin(current_waveform); 
   AudioInterrupts();
 }
 
@@ -149,16 +153,36 @@ void modeCleanUp(void) {
     //Vibrato Synth Starting
     //knob 1 = depth
     //knob 2 = rate
-    
-    //we set the bit crusher to pass through
-    bitcrusher1.bits(bitsPassthrough); 
-    bitcrusher1.sampleRate(bitsRatePassthrough); 
-
+    amp1.gain(3);
+    //we set the modulated waveform to 0
+    AudioNoInterrupts();
+    waveformMod1.frequency(0);
+    waveformMod2.frequency(0);
+    waveformMod3.frequency(0);
+    waveformMod4.frequency(0); 
+    envelope1.attack(ADSR_a); 
+    envelope2.attack(ADSR_a); 
+    envelope3.attack(ADSR_a);
+    envelope4.attack(ADSR_a);      
+    envelope1.hold(ADSR_hold); 
+    envelope2.hold(ADSR_hold); 
+    envelope3.hold(ADSR_hold); 
+    envelope4.hold(ADSR_hold); 
+    envelope1.decay(ADSR_d);
+    envelope2.decay(ADSR_d);
+    envelope3.decay(ADSR_d);
+    envelope4.decay(ADSR_d);
+    envelope1.sustain(ADSR_s); 
+    envelope2.sustain(ADSR_s);
+    envelope3.sustain(ADSR_s);
+    envelope4.sustain(ADSR_s); 
+    AudioInterrupts();
 
   } else if (mode == 1) { 
     // Harmonic Sweeper
     //knob 1 = rate
     //knob 2 = envelope scaled
+    amp1.gain(2);
     AudioNoInterrupts();
     //reset amplitude to 1
     waveform1.amplitude(1);
@@ -175,13 +199,6 @@ void modeCleanUp(void) {
     // Octave Arpeggiator
     //knob 1 = rate
     //knob 2 = envelope scaled
-
-//    AudioNoInterrupts();
-//    envelope1.sustain(0.1); 
-//    envelope2.sustain(0.1);
-//    envelope3.sustain(0.1);
-//    envelope4.sustain(0.1);  
-//    AudioInterrupts();
     
   } else if (mode == 3) { 
     // Octave Cascade
@@ -205,10 +222,14 @@ void modeCleanUp(void) {
     AudioInterrupts();
     
   } else if (mode == 4) { 
-    //bit crusher
+    //FM Synth
     //knob 1 = bits
     //knob 2 = sampling rate
     AudioNoInterrupts();
+    waveform1.frequency(0); 
+    waveform2.frequency(0); 
+    waveform3.frequency(0); 
+    waveform4.frequency(0); 
     envelope1.decay(ADSR_d);
     envelope2.decay(ADSR_d);
     envelope3.decay(ADSR_d);
@@ -218,5 +239,14 @@ void modeCleanUp(void) {
     envelope3.sustain(ADSR_s);
     envelope4.sustain(ADSR_s); 
     AudioInterrupts();
+  } else if (mode == 5) { 
+    //FM Arp. 
+    AudioNoInterrupts();
+    envelope1.sustain(0.1); 
+    envelope2.sustain(0.1);
+    envelope3.sustain(0.1);
+    envelope4.sustain(0.1);  
+    AudioInterrupts();
+    
   }
 }
