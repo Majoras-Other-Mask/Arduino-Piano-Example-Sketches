@@ -7,13 +7,17 @@ void screenUpdate(void) {
   display.setTextSize(1);
   display.setTextWrap(1); 
   display.println(modeString[mode]);
-  display.print(pitchString[pitchMode]);
-  display.print("   "); 
-  display.print("Oct: "); 
-  display.println(octaveDisplay); 
   display.print(knob1String[mode]); 
   display.print("   "); 
   display.println(knob2String[mode]);
+  if (mode == 0) { 
+    display.print("3 = S");  
+  } else { 
+    display.print(pitchString[pitchMode]);
+  } 
+  display.print("   "); 
+  display.print("Oct: "); 
+  display.println(octaveDisplay); 
   display.print("Wave = "); 
   display.println(waveString[waveForm]);  
   display.display();
@@ -50,6 +54,9 @@ void getButton(void) {
  
   old25 = pin25; 
   pin25 = digitalRead(KEY_25);
+
+  old1 = pin1; 
+  pin1 = digitalRead(1); 
 }
 
 //determine if function key (key 25) has been pressed
@@ -59,13 +66,15 @@ void key25Func(void) {
   if (pin25==1 && old25 == 0) {
     //Flash LED 
     digitalWrite(PP_LED, 1);
-    delay(100);
+    delay(50);
     digitalWrite(PP_LED, 0);
 
     //determine if a secondary function key has been pressed for pitch or waveform
 
     if (secondFunc == 4){ //turn pitch tuning off
-      pitchMode = (pitchMode+1) %2;  
+      if (mode != 0) { 
+        pitchMode = (pitchMode+1) %2;  
+      } 
     } else if (secondFunc == 2) { //change waveform
       waveForm = (waveForm+1) %7; 
       waveformSwitch(); 
@@ -83,10 +92,32 @@ void key25Func(void) {
         octShiftFunc();       
     } else { //change mode if only button 25 is pressed
       //increase counter 
-      mode = (mode+1) %6; //counter goes 0-4
+      mode = (mode+1) %7; //counter goes 0-6
       modeCleanUp(); //run this to cleanup any mode specific settings
     }
     screenUpdate();
+  }
+
+  //check if hold button has been pressed
+  holdFunc(); 
+}
+
+void holdFunc(void) { 
+  //check if hold button has been pressed
+  if (old1 == 1 && pin1 == 0) { 
+    digitalWrite(PP_LED, 1);
+    delay(50);
+    digitalWrite(PP_LED, 0);
+    holdState = (holdState + 1) % 2; 
+    if (holdState == 1) { 
+      holdKey[0] = key[0]; 
+      holdKey[1] = key[1]; 
+      holdKey[2] = key[2]; 
+      holdKey[3] = key[3]; 
+      digitalWrite(PP_LED, 1);
+    } else if (holdState == 0) { 
+      digitalWrite(PP_LED, 0); 
+    }
   }
 }
 
@@ -149,40 +180,28 @@ void waveformSwitch(void) {
 }
 
 void modeCleanUp(void) { 
-    if (mode == 0) { 
-    //Vibrato Synth Starting
-    //knob 1 = depth
-    //knob 2 = rate
-    amp1.gain(3);
-    //we set the modulated waveform to 0
+  if (mode == 0) { 
     AudioNoInterrupts();
     waveformMod1.frequency(0);
     waveformMod2.frequency(0);
     waveformMod3.frequency(0);
     waveformMod4.frequency(0); 
-    envelope1.attack(ADSR_a); 
-    envelope2.attack(ADSR_a); 
-    envelope3.attack(ADSR_a);
-    envelope4.attack(ADSR_a);      
-    envelope1.hold(ADSR_hold); 
-    envelope2.hold(ADSR_hold); 
-    envelope3.hold(ADSR_hold); 
-    envelope4.hold(ADSR_hold); 
-    envelope1.decay(ADSR_d);
-    envelope2.decay(ADSR_d);
-    envelope3.decay(ADSR_d);
-    envelope4.decay(ADSR_d);
-    envelope1.sustain(ADSR_s); 
-    envelope2.sustain(ADSR_s);
-    envelope3.sustain(ADSR_s);
-    envelope4.sustain(ADSR_s); 
+    //reset amplitude to 1
+    waveform1.amplitude(1);
+    waveform2.amplitude(1);
+    waveform3.amplitude(1);
+    waveform4.amplitude(1);
+    envelope1.hold(20); 
+    envelope2.hold(20); 
+    envelope3.hold(20); 
+    envelope4.hold(20);  
     AudioInterrupts();
+    
 
-  } else if (mode == 1) { 
+  } else if (mode == 2) { 
     // Harmonic Sweeper
     //knob 1 = rate
     //knob 2 = envelope scaled
-    amp1.gain(2);
     AudioNoInterrupts();
     //reset amplitude to 1
     waveform1.amplitude(1);
@@ -193,14 +212,19 @@ void modeCleanUp(void) {
     envelope2.sustain(0.1);
     envelope3.sustain(0.1);
     envelope4.sustain(0.1); 
+    envelope1.release(ADSR_r); 
+    envelope2.release(ADSR_r); 
+    envelope3.release(ADSR_r); 
+    envelope4.release(ADSR_r); 
+
     AudioInterrupts();
     
-  } else if (mode == 2) { 
+  } else if (mode == 3) { 
     // Octave Arpeggiator
     //knob 1 = rate
     //knob 2 = envelope scaled
     
-  } else if (mode == 3) { 
+  } else if (mode == 4) { 
     // Octave Cascade
     //knob 1 = rate
     //knob 2 = envelope decay
@@ -221,7 +245,9 @@ void modeCleanUp(void) {
     envelope4.sustain(0.1);  
     AudioInterrupts();
     
-  } else if (mode == 4) { 
+  } else if (mode == 5) { 
+    ledState = 1; 
+    ledOnOff(); 
     //FM Synth
     //knob 1 = bits
     //knob 2 = sampling rate
@@ -239,7 +265,7 @@ void modeCleanUp(void) {
     envelope3.sustain(ADSR_s);
     envelope4.sustain(ADSR_s); 
     AudioInterrupts();
-  } else if (mode == 5) { 
+  } else if (mode == 6) { 
     //FM Arp. 
     AudioNoInterrupts();
     envelope1.sustain(0.1); 
@@ -248,5 +274,40 @@ void modeCleanUp(void) {
     envelope4.sustain(0.1);  
     AudioInterrupts();
     
+  } else if (mode == 1) { 
+    ledState = 1; 
+    ledOnOff();
+    sine1.amplitude(1); 
+    //Vibrato Synth Starting
+    //knob 1 = depth
+    //knob 2 = rate
+    //we set the modulated waveform to 0
+    AudioNoInterrupts();
+    envelope1.attack(ADSR_a); 
+    envelope2.attack(ADSR_a); 
+    envelope3.attack(ADSR_a);
+    envelope4.attack(ADSR_a);      
+    envelope1.hold(ADSR_hold); 
+    envelope2.hold(ADSR_hold); 
+    envelope3.hold(ADSR_hold); 
+    envelope4.hold(ADSR_hold); 
+    envelope1.decay(ADSR_d);
+    envelope2.decay(ADSR_d);
+    envelope3.decay(ADSR_d);
+    envelope4.decay(ADSR_d);
+    envelope1.sustain(1); 
+    envelope2.sustain(1);
+    envelope3.sustain(1);
+    envelope4.sustain(1); 
+    AudioInterrupts();
   }
-}
+} 
+
+void ledOnOff(void) { 
+  ledState = (ledState + 1) % 2;
+  if (ledState == 0) { 
+    digitalWrite(PP_LED, 0); 
+  } else { 
+    digitalWrite(PP_LED, 1);
+  }
+} 
