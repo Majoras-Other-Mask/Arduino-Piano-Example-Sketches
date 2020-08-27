@@ -11,15 +11,17 @@ void screenUpdate(void) {
   display.print("   "); 
   display.println(knob2String[mode]);
   if (mode == 0) { 
-    display.print("3 = S");  
+    display.print("3: Sus.");  
   } else { 
     display.print(pitchString[pitchMode]);
   } 
-  display.print("   "); 
+  display.print("  "); 
   display.print("Oct: "); 
-  display.println(octaveDisplay); 
+  display.print(octaveDisplay);
+  display.print("  "); 
+  display.println(holdString[holdState]); 
   display.print("Wave = "); 
-  display.println(waveString[waveForm]);  
+  display.println(waveString[waveForm]);   
   display.display();
 }
 
@@ -78,13 +80,13 @@ void key25Func(void) {
     } else if (secondFunc == 2) { //change waveform
       waveForm = (waveForm+1) %7; 
       waveformSwitch(); 
-    } else if (secondFunc == 1) { 
+    } else if (secondFunc == 1) { //change octave down
         octaveShift = octaveShift - 1; 
         if (octaveShift < 0) { 
           octaveShift = 0 ;
         }
         octShiftFunc();
-    } else if (secondFunc == 3) {
+    } else if (secondFunc == 3) { //change octave up
         octaveShift = octaveShift + 1; 
         if (octaveShift > 4) { 
           octaveShift = 4 ;
@@ -118,6 +120,7 @@ void holdFunc(void) {
     } else if (holdState == 0) { 
       digitalWrite(PP_LED, 0); 
     }
+    screenUpdate(); 
   }
 }
 

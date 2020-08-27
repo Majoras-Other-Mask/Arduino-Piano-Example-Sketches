@@ -96,11 +96,12 @@ float vib2;
 int pitchMode; 
 int mode;
 String modeString[] = {"ADS Synth", "Vibrato Synth", "Harmonic Sweeper", "Octave Arpeggiator", "Octave Cascade", "FM Synth", "FM Arpeggiator"};  
-String pitchString[] = {"Pitch = OFF", "Pitch = ON "}; 
-String knob1String[] = {"1 = A", "1 = Depth", "1 = Rate", "1 = Rate", "1 = Rate", "1 = Mod.", "1 = Rate"}; 
-String knob2String[] = {"2 = D", "2 = Rate", "2 = Env.", "2 = Env.", "2 = Decay", "2 = Env.", "2 = Env."};
+String pitchString[] = {"P: OFF", "P: ON "}; 
+String knob1String[] = {"1: Att.", "1: Depth", "1: Rate", "1: Rate", "1: Rate", "1: Mod.", "1: Rate"}; 
+String knob2String[] = {"2: Dec.", "2: Rate", "2: Env.", "2: Env.", "2: Decay", "2: Env.", "2: Env."};
 String waveString[] = {"SINE", "SAW", "REVERSE SAW", "SQUARE", "TRIANGLE", "TRIANGLE VARIABLE",
                       "PULSE"}; 
+String holdString[] = {"", "HOLD"};                     
 
 //Setup LED
 #define PP_LED 8   // LED on pocket piano
@@ -121,7 +122,7 @@ int n;
 #define MUX_OUT_1 6
 #define MUX_OUT_2 5
 
-float freqBase[] = { 
+float freqBase[] = { //base frequencies for keys
   0, 
   261.63, 
   277.18, 
@@ -147,18 +148,6 @@ float freqBase[] = {
   880.00, 
   932.33, 
   987.77
-//  1046.50, 
-//  1108.73,
-//  1174.66, 
-//  1244.51, 
-//  1318.51, 
-//  1396.91, 
-//  1479.98, 
-//  1567.98, 
-//  1661.22, 
-//  1760.00, 
-//  1864.66, 
-//  1975.53
 };
 
 // this 32 bit number holds the states of the 24 buttons, 1 bit per button
@@ -167,14 +156,15 @@ uint32_t buttons = 0xFFFFFFFF;
 // this is the wave form of the oscillators 
 int waveForm; 
 
-// tuning knob 
+// tuning value storage 
 float pitchScale;
 
 //knob 1
 int knob1; 
-
 //knob 2
-int knob2; 
+int knob2;
+//knob 3
+float knob3;  
 
 // holds frequency value used to play
 float freqPlay[] = {0, 0, 0, 0}; //setting for 4 note poly synth
@@ -182,7 +172,8 @@ float freqLast[] = {0, 0, 0, 0}; //save last fequency
 
 // voices (up to keys held down)
 uint8_t key[] = {0, 0, 0, 0}; //setting for 4 note poly synth
-uint8_t holdKey[] {0, 0, 0, 0}; 
+uint8_t holdKey[] {0, 0, 0, 0}; //stores key when hold button is pressed
+
 // octave multiplier
 uint8_t octave = 0; 
 
@@ -192,11 +183,11 @@ int arp = 0;
 // harmonic sweep counter
 int sweep = 0; 
 
+//used for calculations in code
 float two12th = 1.059463; //used for arp. calculations
+float vibrato = 0.0; //used for vibrato effect (changes with knobs)
 
-float vibrato = 0.0; //used for vibrato effect 
-
-//envelope variables
+//envelope variables for default values
 float ADSR_a;
 float ADSR_d;
 float ADSR_s;
@@ -204,19 +195,10 @@ float ADSR_r;
 float ADSR_hold; 
 float envMult; 
 
-
-//******************************************************
-int current_waveform=0;
-
-extern const int16_t myWaveform[256];  // defined in myWaveform.ino
-
-//bit crusher
-int bitsPassthrough = 16; 
-int bitsRatePassthrough = 44100; 
+int current_waveform = 0; //stores what current waveform we are on
 
 void setup() {
   //******************************************************
-  dac1.analogReference(INTERNAL); 
   // configure pins for multiplexer
   pinMode(MUX_SEL_A, OUTPUT);  // these are the select pins
   pinMode(MUX_SEL_B, OUTPUT);
@@ -250,15 +232,13 @@ void setup() {
   
 
   //flash led to let us know it is turning on
-  digitalWrite(PP_LED, 1);
+  ledOnOff(); 
   delay(100);
-  digitalWrite(PP_LED, 0);
+  ledOnOff();
   delay(100);
-  digitalWrite(PP_LED, 1);
+  ledOnOff();
   delay(100);
-  digitalWrite(PP_LED, 0);
-  delay(100);
-  digitalWrite(PP_LED, 1);
+  ledOnOff();
 
   //Turning on serial for debugging
   Serial.begin(57600);
@@ -269,7 +249,7 @@ void setup() {
   // Audio connections require memory to work.  For more
   // detailed information, see the MemoryAndCpuUsage example
   AudioMemory(100);
-  for (int z=0; z<4; z++) { 
+  for (int z=0; z<4; z++) { //setup the waves and modulated waves
     waves[z]->frequency(0); 
     waves[z]->amplitude(1.0); 
     waves[z]->begin(current_waveform); 
@@ -284,8 +264,8 @@ void setup() {
   //mixer1 is for mixing notes being played
   mixer1.gain(0, 0.25); 
   mixer1.gain(1, 0.20); 
-  mixer1.gain(2, 0.15); 
-  mixer1.gain(3, 0.1); 
+  mixer1.gain(2, 0.20); 
+  mixer1.gain(3, 0.20); 
 
   //mixers 2-5 are used to switch between regular wave and modulated wave
   mixer2.gain(0,1); 
@@ -296,10 +276,14 @@ void setup() {
   mixer4.gain(1,1); 
   mixer5.gain(0,1); 
   mixer5.gain(1,1); 
-  
+
+  //amp can adjust final output before dac if needed
   amp1.gain(1); 
 
+  //I haven't messed with the filter yet but here to work with later
   filter1.frequency(0); 
+
+  dac1.analogReference(INTERNAL); 
 
   //default envelope variables
   ADSR_a = 9.2; 
@@ -320,6 +304,7 @@ void setup() {
   sine1.amplitude(1); 
   sine1.frequency(5);
 
+  //this runs the cleanup function that makes sure everything is setup for the ADS Synth
   modeCleanUp(); 
   
 
@@ -332,12 +317,13 @@ void setup() {
     Serial.println(F("SSD1306 allocation failed"));
     for (;;) {
       // Don't proceed, loop forever if screen not found
-      digitalWrite(PP_LED, 1);
+      ledOnOff(); 
       delay(100);
-      digitalWrite(PP_LED, 0);
+      ledOnOff(); 
       delay(100);
     }
   } 
+  
   // Show initial display buffer contents on the screen --
   // the library initializes this with an Adafruit splash screen.
   display.display();
@@ -356,28 +342,29 @@ void setup() {
 }
 
 void loop() {
-  Serial.print("amp"); 
-  Serial.print(amp1.processorUsage()); 
-  Serial.print("all=");
-  Serial.print(AudioProcessorUsage());
-  Serial.print(",");
-  Serial.print(AudioProcessorUsageMax());
-  Serial.print("    ");
-  Serial.print("Memory: ");
-  Serial.print(AudioMemoryUsage());
-  Serial.print(",");
-  Serial.println(AudioMemoryUsageMax());
+//  Serial.print("amp"); 
+//  Serial.print(amp1.processorUsage()); 
+//  Serial.print("all=");
+//  Serial.print(AudioProcessorUsage());
+//  Serial.print(",");
+//  Serial.print(AudioProcessorUsageMax());
+//  Serial.print("    ");
+//  Serial.print("Memory: ");
+//  Serial.print(AudioMemoryUsage());
+//  Serial.print(",");
+//  Serial.println(AudioMemoryUsageMax());
   
   //******************************************************
   //Read the knob values
   //knob 1 and 2 are mode dependent
   knob1 = analogRead(A0); 
   knob2 = analogRead(A1); 
+  knob3 = analogRead(A2); 
 
   //pitch control can be turned on and off
   if (pitchMode == 1) { 
     //knob 3 is for the pitch
-    pitchScale = 0.25 + 3.75*(analogRead(A2)/1023.0);
+    pitchScale = 0.25 + 3.75*(knob3/1023.0);
   } else { 
     pitchScale = 1.0; //this lets us scale to C6 when not tuning using pitch knob
   }
@@ -387,8 +374,7 @@ void loop() {
   //and info on button 25
   getButton();
 
-
-    //Get up to 4 keys that were pressed down
+  //Get up to 4 keys that were pressed down
   k = 0;  
   key[0] = key[1] = key[2] = key[3] = 0;
   for (i = 0; i < 25; i++){             // read through buttons
@@ -406,6 +392,7 @@ void loop() {
   //call function key function
   key25Func();
 
+  //if we are in hold mode we set the current keys to be the hold keys
   if (holdState == 1) { 
     key[0] = holdKey[0]; 
     key[1] = holdKey[1]; 
@@ -414,12 +401,11 @@ void loop() {
   }
 
   //******************************************************
-  //get frequencies we are going to play
+  //store the last frequencies that were played (check to see if note should turn on/off/change)
   for (n = 0; n < 4; n++) { 
     freqLast[n] = freqPlay[n]; 
   }
-
-    
+ 
   //apply octave shift
   if (octaveDisplay > 0) { 
     for (n = 0; n < 4; n++) { 
@@ -435,8 +421,14 @@ void loop() {
     }
   }
 
+  //shape sound based on what mode is selected
   if (mode == 0) { 
-     //control envelope with knob 2
+    //ADS Synth
+    //knob1 = Attack
+    //knob2 = Decay
+    //knob3 = Sustain
+    
+    //control envelope with knobs
     envelope1.attack(knob1); 
     envelope2.attack(knob1);
     envelope3.attack(knob1);
@@ -445,22 +437,39 @@ void loop() {
     envelope2.decay(knob2);
     envelope3.decay(knob2);
     envelope4.decay(knob2);
-    
-    float knob3 = analogRead(A2); 
-
     envelope1.sustain(knob3 / 1023.0); 
     envelope2.sustain(knob3 / 1023.0); 
     envelope3.sustain(knob3 / 1023.0); 
     envelope4.sustain(knob3 / 1023.0); 
 
     delay(10); 
-
-  } else if (mode == 2) {  
-    ledOnOff(); 
     
+  } else if (mode == 1) { 
+    //Vibrato Synth
+    //knob 1 = depth
+    //knob 2 = rate   
+
+    sine1.frequency(5 * (knob2 + 1) / 1024.0);  
+    vibrato = 0.95 - rms1.read(); 
+    float depth = .25*(knob1)/1023.0;   
+
+    for (int z=0; z<4; z++) { 
+      if (freqPlay[z] > 0) { 
+        freqPlay[z] = freqPlay[z] + freqPlay[z] * depth * vibrato - freqPlay[n]*depth / 2;   
+      } 
+    }   
+    
+    delay(10);
+    
+  } else if (mode == 2) {  
     // Harmonic Sweeper
     //knob 1 = rate
     //knob 2 = envelope scaled
+
+    //turn led on then off each loop
+    ledOnOff();    
+
+    // sweep counter
     sweep = (sweep + 1) % 8; 
     for (n=0; n<4; n++) { 
       if (sweep == 1) { 
@@ -480,12 +489,8 @@ void loop() {
       }
     } 
 
-    for (n = 0; n < 4; n++) { 
-      freqPlay[n] = freqPlay[n] * (octave+1); 
-    }
-
     //control envelope with knob 2
-    envMult = knob2 / 1023.0;
+    envMult = knob2 / 1023.0; 
     envelope1.attack(80* envMult); 
     envelope2.attack(80 * envMult);
     envelope3.attack(80 * envMult);
@@ -503,10 +508,14 @@ void loop() {
     delay(int(knob1 >> 2) + 50);   // sweep speed
 
   } else if (mode == 3) { 
-    ledOnOff(); 
     // Octave Arpeggiator
     //knob 1 = rate
     //knob 2 = envelope scaled
+
+    //turn led on then off each loop
+    ledOnOff(); 
+    
+    //arp sweeper
     arp = (arp + 1) % 7; 
     for (n=0; n<4; n++) { 
       if (arp == 1) { 
@@ -523,12 +532,6 @@ void loop() {
         freqPlay[n] = freqPlay[n]*4; 
       }
     } 
-
-    
-    for (n = 0; n < 4; n++) { 
-      freqPlay[n] = freqPlay[n] * (octave+1); 
-      envs[n]->decay(255 * knob2 / 1023.0);     
-      }
       
     //control envelope with knob 2
     envMult = knob2 / 1023.0;
@@ -549,30 +552,41 @@ void loop() {
     delay(int(knob1 >> 2) + 50);   // sweep speed
 
         
-  } else if (mode == 4) { 
-    ledOnOff(); 
+  } else if (mode == 4) {  
     // Octave Cascade
     //knob 1 = rate
     //knob 2 = envelope decay
+    
+    //turn led on then off each loop
+    ledOnOff(); 
+    
     octave = (octave + 1) % 3;
     for (n = 0; n < 4; n++) { 
       freqPlay[n] = freqPlay[n] * (octave+1); 
-      envs[n]->decay(255 * knob2 / 1023.0);     
+      envs[n]->decay(255 * knob2 / 1023.0); //knob 2 affects decay
       }
+    
+    //knob 1 controls rate
     delay(int(knob1 >> 2) + 50);   // sweep speed
+
+    
   } else if (mode == 5) { 
     // FM Synth
     //knob 1 = modulation
     //knob 2 = envelope
-    //we change the bits/sample rate based on knob 1 and 2
     sine1.amplitude(knob1 / 1023.0); 
     sine1.frequency(20.3 * knob2 / 1023.0);    
     delay(10); 
+    
   } else if (mode == 6) { 
-    ledOnOff(); 
     // FM Arpeggiator
     //knob 1 = rate
     //knob 2 = envelope scaled
+    
+    //turn led on then off each loop
+    ledOnOff(); 
+
+    //arp sweeper
     arp = (arp + 1) % 7; 
     for (n=0; n<4; n++) { 
       if (arp == 1) { 
@@ -589,11 +603,6 @@ void loop() {
         freqPlay[n] = freqPlay[n]*4; 
       }
     } 
-   
-    for (n = 0; n < 4; n++) { 
-      freqPlay[n] = freqPlay[n] * (octave+1); 
-      envs[n]->decay(255 * knob2 / 1023.0);     
-    }
       
     //control envelope with knob 2
     envMult = knob2 / 1023.0;
@@ -612,29 +621,14 @@ void loop() {
 
     //control sweep speed with knob 1
     delay(int(knob1 >> 2) + 50);   // sweep speed
-  } else if (mode == 1) { 
-    //Vibrato Synth
-    //knob 1 = depth
-    //knob 2 = rate   
-
-    sine1.frequency(5 * (knob2 + 1) / 1024.0);  
-    vibrato = 0.95 - rms1.read(); 
-    float depth = .25*(knob1)/1023.0;   
-
-    for (int z=0; z<4; z++) { 
-      if (freqPlay[z] > 0) { 
-        freqPlay[z] = freqPlay[z] + freqPlay[z] * depth * vibrato - freqPlay[n]*depth / 2;   
-      } 
-    }   
-    
-    delay(10);
   }
 
+  //uncomment below line to print freq of lowest key being played  
   //Serial.println(freqPlay[0]); 
   
   //Play the notes
   AudioNoInterrupts();
-  if (mode == 5 || mode == 6) { 
+  if (mode == 5 || mode == 6) { //these modes use the modulated waveform
    for (n = 0; n < 4; n++) { 
       freqPlay[n] = freqPlay[n]*pitchScale;
       if (freqLast[n] != freqPlay[n]){ 
@@ -643,7 +637,7 @@ void loop() {
         envs[n] ->noteOn();      
       }
     } 
-  } else { 
+  } else { //these modes don't
     for (n = 0; n < 4; n++) { 
       freqPlay[n] = freqPlay[n]*pitchScale;
       if (freqLast[n] != freqPlay[n]){ 
